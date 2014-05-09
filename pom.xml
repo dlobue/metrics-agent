@@ -110,7 +110,6 @@
       <version>1.6.4</version>
       <scope>system</scope>
       <systemPath>${basedir}/lib/sigar/sigar-1.6.4.jar</systemPath>
-      <optional>true</optional>
     </dependency>
   </dependencies>
 

@@ -17,19 +17,25 @@
 package net.nottaken.metrics;
 
 import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.graphite.Graphite;
 import com.codahale.metrics.graphite.GraphiteReporter;
+import com.codahale.metrics.jvm.BufferPoolMetricSet;
+import com.codahale.metrics.jvm.GarbageCollectorMetricSet;
+import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
+import com.codahale.metrics.jvm.ThreadStatesGaugeSet;
 import com.codahale.metrics.riemann.Riemann;
 import com.codahale.metrics.riemann.RiemannReporter;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.management.MBeanServer;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
@@ -38,9 +44,16 @@ public class Main {
 
     public static void main(String[] args) {
         MetricRegistry registry = new MetricRegistry();
-        registry.registerAll(new OSMetricsSet());
-        registry.registerAll(new FilesystemMetricsSet());
-        registry.registerAll(new NetworkMetricsSet());
+        registry.register("system", new OSMetricsSet());
+        registry.register("system", new FilesystemMetricsSet());
+        registry.register("system", new NetworkMetricsSet());
+
+        MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+        registry.register("jvm.buffer-pool", new BufferPoolMetricSet(mbs));
+        registry.register("jvm.gc", new GarbageCollectorMetricSet());
+        registry.register("jvm.memory", new MemoryUsageGaugeSet());
+        registry.register("jvm.thread-states", new ThreadStatesGaugeSet());
+
 
         Config config = ConfigFactory.load();
 
@@ -88,6 +101,7 @@ public class Main {
             log.info("Riemann metric reporter started.");
             reporterConfigured = true;
         } catch (ConfigException.Missing e) {
+            log.debug("Riemann reporter is not configured and will not be enabled.");
         } catch (IOException e) {
             System.exit(5);
         }
@@ -106,7 +120,12 @@ public class Main {
             reporterConfigured = true;
             log.info("Graphite metric reporter started.");
         } catch (ConfigException.Missing e) {
+            log.debug("Graphite reporter is unconfigured and will not be enabled.");
         }
+
+
+        final JmxReporter jmxReporter = JmxReporter.forRegistry(registry).build();
+        jmxReporter.start();
 
 
         if (reporterConfigured) {
